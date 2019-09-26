@@ -22,6 +22,8 @@ import android.database.sqlite.SQLiteDatabase;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.os.AsyncTask;
+import android.os.Handler;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
@@ -33,8 +35,18 @@ import android.widget.ExpandableListView;
 import android.widget.SimpleExpandableListAdapter;
 import android.widget.TextView;
 
+import com.amazonaws.auth.CognitoCachingCredentialsProvider;
+import com.amazonaws.regions.Regions;
+import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.sqs.AmazonSQSClient;
+import com.amazonaws.services.sqs.model.ListQueuesResult;
+import com.amazonaws.services.sqs.model.SendMessageRequest;
+import com.amazonaws.services.sqs.model.SendMessageResult;
+import com.google.gson.JsonObject;
+
 import org.w3c.dom.Text;
 
+import java.util.Arrays;
 import java.util.Calendar;
 
 
@@ -214,7 +226,91 @@ public class DeviceControl extends AppCompatActivity {
         db = this.openOrCreateDatabase("air_quality", MODE_PRIVATE, null);
         createDbTable();
 
+
+        // Initialize the Amazon Cognito credentials provider
+//        CognitoCachingCredentialsProvider credentialsProvider = new CognitoCachingCredentialsProvider(
+//                getApplicationContext(),
+//                "us-east-1:c453ed2a-a5bf-418c-b0e2-ab34a81c8e0d", // Identity pool ID
+//                Regions.US_EAST_1 // Region
+//        );
+
+        getCredProvider(this);
+        getSQSClient(this);
+
     }
+    public void syncDbToSQS(View v) {
+        Cursor c = db.rawQuery("SELECT * FROM air_samples LIMIT 2", null);
+
+        c.moveToFirst();
+
+        Log.d("DATABASE", "ROW COUNT: " + Integer.toString(c.getCount()));
+
+        int rdTmIdx = c.getColumnIndex("read_time");
+        int sensorIdx = c.getColumnIndex("sensor_value");
+
+        int i = 0;
+        while (i < c.getCount()) {
+            JsonObject msg = new JsonObject();
+            msg.addProperty("sensor_value", c.getString(sensorIdx));
+            msg.addProperty("read_time", c.getLong(rdTmIdx));
+
+            Log.d("QUEUE", "Sending msg: " + msg.toString());
+            new SendMessage().execute(msg.toString());
+            i++;
+            c.moveToNext();
+        }
+    }
+    private static AmazonSQSClient sqsClient;
+    private static CognitoCachingCredentialsProvider sCredProvider;
+    private static String qURL = "https://sqs.us-east-1.amazonaws.com/304286125266/air_quality_dev";
+
+    private class SendMessage extends AsyncTask<String, Void, SendMessageResult> {
+
+        // NOTE: String... is a String[]
+        protected SendMessageResult doInBackground(String[] args) {
+
+            Log.d("QUEUE", "sending message");
+            String jsonMsg = args[0];
+            return sqsClient.sendMessage(qURL, jsonMsg);
+
+        }
+
+        protected void onPostExecute() {
+           return;
+        }
+    }
+
+    /**
+     * Gets an instance of CognitoCachingCredentialsProvider which is
+     * constructed using the given Context.
+     *
+     * @param context An Context instance.
+     * @return A default credential provider.
+     */
+    private static CognitoCachingCredentialsProvider getCredProvider(Context context) {
+        if (sCredProvider == null) {
+            sCredProvider = new CognitoCachingCredentialsProvider(
+                    context.getApplicationContext(),
+                    "us-east-1:c453ed2a-a5bf-418c-b0e2-ab34a81c8e0d", // Identity pool ID
+                    Regions.US_EAST_1);
+        }
+        return sCredProvider;
+    }
+
+    /**
+     * Gets an instance of a S3 client which is constructed using the given
+     * Context.
+     *
+     * @param context An Context instance.
+     * @return A default S3 client.
+     */
+    public static AmazonSQSClient getSQSClient(Context context) {
+        if (sqsClient == null) {
+            sqsClient = new AmazonSQSClient(getCredProvider(context.getApplicationContext()));
+        }
+        return sqsClient;
+    }
+
 
     private void createDbTable() {
         String createTable = "CREATE TABLE IF NOT EXISTS air_samples( " +
@@ -234,7 +330,20 @@ public class DeviceControl extends AppCompatActivity {
     }
 
     public void logAllRows(View v) {
-        getAllDbRows();
+//        getAllDbRows();
+
+        Cursor c = db.rawQuery("SELECT COUNT(*) as cnt FROM air_samples", null);
+
+        int cntCol = c.getColumnIndex("cnt");
+
+        c.moveToFirst();
+
+        String cnt = Integer.toString(c.getInt(cntCol));
+
+        TextView cntV = findViewById(R.id.dbCntText);
+        cntV.setText( cnt );
+
+        c.close();
     }
 
     private void getAllDbRows() {
