@@ -34,22 +34,13 @@ import android.view.View;
 import android.widget.ExpandableListView;
 import android.widget.SimpleExpandableListAdapter;
 import android.widget.TextView;
-
 import com.google.gson.JsonObject;
-
-import org.w3c.dom.Text;
-
-import java.util.Arrays;
 import java.util.Calendar;
 
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
-import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.ListIterator;
 
 import static com.github.brycemcd.air_quality_2.OnlineQueue.getCredProvider;
 import static com.github.brycemcd.air_quality_2.OnlineQueue.getSQSClient;
@@ -103,8 +94,8 @@ public class DeviceControl extends AppCompatActivity {
 
 
     LocationManager locationManager;
+    LocationTracker lt = new LocationTracker();
     LocationListener locationListener;
-    Location lastLocation;
 
     SQLiteDatabase db;
 
@@ -168,16 +159,12 @@ public class DeviceControl extends AppCompatActivity {
         bluetoothManager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
         bluetoothAdapter = bluetoothManager.getAdapter();
 
-        // NOTE: this works!
-//        mBluetoothLeService.setBtMgr(bluetoothManager);
-//        mBluetoothLeService.setItent(gattServiceIntent);
-//        mBluetoothLeService.setCntxt(this);
-//        mBluetoothLeService.initialize();
-//        mBluetoothLeService.connect(mDeviceAddress);
         initializeBTConnction();
         connect(mDeviceAddress);
 
         locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
+
+        locationListener = lt.locationListener;
 
         try {
             // NOTE: this is just for kicks. It's not required for anything
@@ -194,31 +181,6 @@ public class DeviceControl extends AppCompatActivity {
         }
 
 
-        locationListener = new LocationListener() {
-            @Override
-            public void onLocationChanged(Location location) {
-                Log.d("LOCATION", "onLocationChanged");
-                Log.d("LOCATION", location.toString());
-                lastLocation = location;
-            }
-
-            @Override
-            public void onStatusChanged(String provider, int status, Bundle extras) {
-                Log.d("LOCATION", "onStatusChanged");
-
-            }
-
-            @Override
-            public void onProviderEnabled(String provider) {
-                Log.d("LOCATION", "onProviderEnabled");
-
-            }
-
-            @Override
-            public void onProviderDisabled(String provider) {
-
-            }
-        };
 
         // FIXME: I think this is redundant for somewhere else
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
@@ -489,7 +451,7 @@ public class DeviceControl extends AppCompatActivity {
             Log.d("OH NOES", "onCharacteristicChanged - airReading: " + airReading);
 
             // NOTE: the final string is because of threads
-            final Location lastLoc = lastLocation;
+            final Location lastLoc = lt.lastLocation;
             String output = airReading;
             output += ",";
 

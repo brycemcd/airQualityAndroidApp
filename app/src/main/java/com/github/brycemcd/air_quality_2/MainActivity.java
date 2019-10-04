@@ -148,7 +148,13 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private BluetoothDevice magicDevice;
+
     public void switchActivity(View view) {
+        final Intent intent = new Intent(this, DeviceControl.class);
+        startActivity(intent);
+    }
+
+    public void switchActivityOld(View view) {
         if (magicDevice == null) {
             Log.d("onListItemClick", "NO magicDevice. HALTING");
             return;
