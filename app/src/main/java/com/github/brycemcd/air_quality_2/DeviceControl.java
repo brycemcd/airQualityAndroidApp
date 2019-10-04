@@ -16,6 +16,7 @@ import android.bluetooth.BluetoothProfile;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
@@ -40,6 +41,7 @@ import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.sqs.AmazonSQSClient;
 import com.amazonaws.services.sqs.model.ListQueuesResult;
+import com.amazonaws.services.sqs.model.SendMessageBatchRequestEntry;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.model.SendMessageResult;
 import com.google.gson.JsonObject;
@@ -51,8 +53,12 @@ import java.util.Calendar;
 
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.ListIterator;
 
 public class DeviceControl extends AppCompatActivity {
 
@@ -138,6 +144,8 @@ public class DeviceControl extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+
         setContentView(R.layout.activity_device_control);
 
         final Intent intent = getIntent();
@@ -186,6 +194,9 @@ public class DeviceControl extends AppCompatActivity {
             Log.d("LOCATION", "LAST KNOWN NET: " + netLoc.toString());
         } catch (SecurityException e) {
             Log.d("LOCATION", "caught security exception");
+        } catch (NullPointerException e) {
+            // NOTE: This happens if the last location is null
+            Log.d("LOCATION", "Caught NPE");
         }
 
 
@@ -225,6 +236,11 @@ public class DeviceControl extends AppCompatActivity {
 
         db = this.openOrCreateDatabase("air_quality", MODE_PRIVATE, null);
         createDbTable();
+        // NOTE: this removes a bunch of testing CRAP data
+//        db.delete("air_samples", "provider = ? OR speed = ?", new String[]{
+//                "network",
+//                "0.0"
+//        });
 
 
         // Initialize the Amazon Cognito credentials provider
@@ -239,39 +255,85 @@ public class DeviceControl extends AppCompatActivity {
 
     }
     public void syncDbToSQS(View v) {
-        Cursor c = db.rawQuery("SELECT * FROM air_samples LIMIT 2", null);
+        Cursor c = db.rawQuery("SELECT * FROM air_samples LIMIT 200", null);
 
         c.moveToFirst();
 
         Log.d("DATABASE", "ROW COUNT: " + Integer.toString(c.getCount()));
 
-        int rdTmIdx = c.getColumnIndex("read_time");
-        int sensorIdx = c.getColumnIndex("sensor_value");
+//        // NOTE: you are here
+//        String[] dbCols = {"sensor_value", "read_time", "loc_time", "lat", "long", "speed",
+//                "bearing", "altitude", "accuracy", "provider"};
+//        HashMap<String, Class> dbCols = new HashMap<>();
+//        dbCols.put("sensor_value", String.class);
 
         int i = 0;
+        Long j = 0L;
         while (i < c.getCount()) {
             JsonObject msg = new JsonObject();
-            msg.addProperty("sensor_value", c.getString(sensorIdx));
-            msg.addProperty("read_time", c.getLong(rdTmIdx));
+            msg.addProperty("sensor_value", c.getString(c.getColumnIndex("sensor_value")));
+            msg.addProperty("read_time", c.getLong(c.getColumnIndex("read_time")));
+            msg.addProperty("loc_time", c.getLong(c.getColumnIndex("loc_time")));
+            msg.addProperty("lat", c.getDouble(c.getColumnIndex("lat")));
+            msg.addProperty("long", c.getDouble(c.getColumnIndex("long")));
+            msg.addProperty("speed", c.getDouble(c.getColumnIndex("speed")));
+            msg.addProperty("bearing", c.getDouble(c.getColumnIndex("bearing")));
+            msg.addProperty("altitude", c.getDouble(c.getColumnIndex("altitude")));
+            msg.addProperty("accuracy", c.getDouble(c.getColumnIndex("accuracy")));
+            msg.addProperty("provider", c.getString(c.getColumnIndex("provider")));
 
             Log.d("QUEUE", "Sending msg: " + msg.toString());
-            new SendMessage().execute(msg.toString());
+
+
+
+
+            // FIXME: there's a bug in here where the last batch of messages won't get sent
+            // because the total count is not divisible by 10
+            new SendMessage().execute(
+                    Long.toString(++j),
+                    msg.toString()
+            );
+//            new SendMessage().execute(msg.toString());
+
+            String[] whereClauseArgs = {
+                    Long.toString(c.getLong(c.getColumnIndex("read_time"))),
+                    Long.toString(c.getLong(c.getColumnIndex("loc_time"))),
+                    c.getString(c.getColumnIndex("sensor_value"))
+
+            };
+            db.delete("air_samples",
+                    "read_time = ? AND loc_time = ? AND sensor_value = ?",
+                    whereClauseArgs);
             i++;
             c.moveToNext();
         }
     }
+
     private static AmazonSQSClient sqsClient;
     private static CognitoCachingCredentialsProvider sCredProvider;
     private static String qURL = "https://sqs.us-east-1.amazonaws.com/304286125266/air_quality_dev";
+    static List<SendMessageBatchRequestEntry> msgBatch = new LinkedList<>();
 
-    private class SendMessage extends AsyncTask<String, Void, SendMessageResult> {
+    private class SendMessage extends AsyncTask<String, Void, Boolean> {
 
-        // NOTE: String... is a String[]
-        protected SendMessageResult doInBackground(String[] args) {
+//        protected SendMessageResult doInBackground(String[] args) {
+        protected Boolean doInBackground(String[] args) {
 
             Log.d("QUEUE", "sending message");
-            String jsonMsg = args[0];
-            return sqsClient.sendMessage(qURL, jsonMsg);
+            // NOTE: this works for single messages
+//            return sqsClient.sendMessage(qURL, jsonMsg);
+            String jsonMsg = args[1];
+            String msgId = args[0];
+            SendMessageBatchRequestEntry smbre = new SendMessageBatchRequestEntry(msgId, jsonMsg);
+            msgBatch.add(smbre);
+
+            if (msgBatch.size() == 10) {
+                Log.i("BATCH QUEUE", "SENDING BATCH");
+                sqsClient.sendMessageBatch(qURL, msgBatch);
+                msgBatch = new LinkedList<>();
+            }
+
+            return true;
 
         }
 
@@ -447,6 +509,10 @@ public class DeviceControl extends AppCompatActivity {
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 intentAction = ACTION_GATT_CONNECTED;
                 mConnectionState = STATE_CONNECTED;
+
+                TextView t = findViewById(R.id.connection_state);
+                t.setText("Connected!");
+
                 broadcastUpdate(intentAction);
                 Log.i("OH NOES", "Connected to GATT server.");
                 // Attempts to discover services after successful connection.
@@ -457,6 +523,10 @@ public class DeviceControl extends AppCompatActivity {
                 intentAction = ACTION_GATT_DISCONNECTED;
                 mConnectionState = STATE_DISCONNECTED;
                 Log.i("OH NOES", "Disconnected from GATT server.");
+
+                TextView t = findViewById(R.id.connection_state);
+                t.setText("NOT NOT Connected!");
+
                 broadcastUpdate(intentAction);
             }
         }
