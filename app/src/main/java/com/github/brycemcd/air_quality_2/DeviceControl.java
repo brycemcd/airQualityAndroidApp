@@ -24,7 +24,6 @@ import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.AsyncTask;
-import android.os.Handler;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
@@ -36,14 +35,6 @@ import android.widget.ExpandableListView;
 import android.widget.SimpleExpandableListAdapter;
 import android.widget.TextView;
 
-import com.amazonaws.auth.CognitoCachingCredentialsProvider;
-import com.amazonaws.regions.Regions;
-import com.amazonaws.services.s3.AmazonS3Client;
-import com.amazonaws.services.sqs.AmazonSQSClient;
-import com.amazonaws.services.sqs.model.ListQueuesResult;
-import com.amazonaws.services.sqs.model.SendMessageBatchRequestEntry;
-import com.amazonaws.services.sqs.model.SendMessageRequest;
-import com.amazonaws.services.sqs.model.SendMessageResult;
 import com.google.gson.JsonObject;
 
 import org.w3c.dom.Text;
@@ -59,6 +50,9 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
+
+import static com.github.brycemcd.air_quality_2.OnlineQueue.getCredProvider;
+import static com.github.brycemcd.air_quality_2.OnlineQueue.getSQSClient;
 
 public class DeviceControl extends AppCompatActivity {
 
@@ -243,17 +237,23 @@ public class DeviceControl extends AppCompatActivity {
 //        });
 
 
-        // Initialize the Amazon Cognito credentials provider
-//        CognitoCachingCredentialsProvider credentialsProvider = new CognitoCachingCredentialsProvider(
-//                getApplicationContext(),
-//                "us-east-1:c453ed2a-a5bf-418c-b0e2-ab34a81c8e0d", // Identity pool ID
-//                Regions.US_EAST_1 // Region
-//        );
-
         getCredProvider(this);
         getSQSClient(this);
 
     }
+
+    protected class SendMessage extends AsyncTask<String, Void, Boolean> {
+        protected Boolean doInBackground(String[] args) {
+            String jsonMsg = args[1];
+            String msgId = args[0];
+
+            OnlineQueue.addEntry(msgId, jsonMsg);
+
+            return true;
+        }
+
+    }
+
     public void syncDbToSQS(View v) {
         Cursor c = db.rawQuery("SELECT * FROM air_samples LIMIT 200", null);
 
@@ -287,13 +287,10 @@ public class DeviceControl extends AppCompatActivity {
 
 
 
-            // FIXME: there's a bug in here where the last batch of messages won't get sent
-            // because the total count is not divisible by 10
             new SendMessage().execute(
                     Long.toString(++j),
                     msg.toString()
             );
-//            new SendMessage().execute(msg.toString());
 
             String[] whereClauseArgs = {
                     Long.toString(c.getLong(c.getColumnIndex("read_time"))),
@@ -308,71 +305,6 @@ public class DeviceControl extends AppCompatActivity {
             c.moveToNext();
         }
     }
-
-    private static AmazonSQSClient sqsClient;
-    private static CognitoCachingCredentialsProvider sCredProvider;
-    private static String qURL = "https://sqs.us-east-1.amazonaws.com/304286125266/air_quality_dev";
-    static List<SendMessageBatchRequestEntry> msgBatch = new LinkedList<>();
-
-    private class SendMessage extends AsyncTask<String, Void, Boolean> {
-
-//        protected SendMessageResult doInBackground(String[] args) {
-        protected Boolean doInBackground(String[] args) {
-
-            Log.d("QUEUE", "sending message");
-            // NOTE: this works for single messages
-//            return sqsClient.sendMessage(qURL, jsonMsg);
-            String jsonMsg = args[1];
-            String msgId = args[0];
-            SendMessageBatchRequestEntry smbre = new SendMessageBatchRequestEntry(msgId, jsonMsg);
-            msgBatch.add(smbre);
-
-            if (msgBatch.size() == 10) {
-                Log.i("BATCH QUEUE", "SENDING BATCH");
-                sqsClient.sendMessageBatch(qURL, msgBatch);
-                msgBatch = new LinkedList<>();
-            }
-
-            return true;
-
-        }
-
-        protected void onPostExecute() {
-           return;
-        }
-    }
-
-    /**
-     * Gets an instance of CognitoCachingCredentialsProvider which is
-     * constructed using the given Context.
-     *
-     * @param context An Context instance.
-     * @return A default credential provider.
-     */
-    private static CognitoCachingCredentialsProvider getCredProvider(Context context) {
-        if (sCredProvider == null) {
-            sCredProvider = new CognitoCachingCredentialsProvider(
-                    context.getApplicationContext(),
-                    "us-east-1:c453ed2a-a5bf-418c-b0e2-ab34a81c8e0d", // Identity pool ID
-                    Regions.US_EAST_1);
-        }
-        return sCredProvider;
-    }
-
-    /**
-     * Gets an instance of a S3 client which is constructed using the given
-     * Context.
-     *
-     * @param context An Context instance.
-     * @return A default S3 client.
-     */
-    public static AmazonSQSClient getSQSClient(Context context) {
-        if (sqsClient == null) {
-            sqsClient = new AmazonSQSClient(getCredProvider(context.getApplicationContext()));
-        }
-        return sqsClient;
-    }
-
 
     private void createDbTable() {
         String createTable = "CREATE TABLE IF NOT EXISTS air_samples( " +
