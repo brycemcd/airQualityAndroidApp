@@ -6,9 +6,11 @@ package com.github.brycemcd.air_quality_2;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothManager;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.location.Location;
@@ -25,6 +27,7 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.util.LinkedList;
 
@@ -75,6 +78,24 @@ public class DeviceControl extends AppCompatActivity {
         return super.onCreateOptionsMenu(menu);
     }
 
+    private AlertDialog.Builder deleteAllDataHandler() {
+        return new AlertDialog.Builder(this)
+                .setIcon(android.R.drawable.ic_menu_delete)
+                .setTitle("Are you Sure!?!")
+                .setMessage("Are you sure you want to delete ALL the data? This cannot be undone.")
+                .setPositiveButton("Delete", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        Log.d("DELETE DATA POSITIVE", "DELETING");
+                        db.deleteAll();
+                        updateUIWithDBRowCount();
+                        Toast.makeText(DeviceControl.this, "Baleted!", Toast.LENGTH_SHORT)
+                                .show();
+                    }
+                })
+                .setNegativeButton("Cancel", null);
+    }
+
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         super.onOptionsItemSelected(item);
@@ -82,7 +103,7 @@ public class DeviceControl extends AppCompatActivity {
 
             case R.id.deleteAll:
                 Log.d("MENU SELECT", "DELETE ALL");
-                db.deleteAll();
+                  deleteAllDataHandler().show();
                 break;
 
             case R.id.syncDataOffDevice:
