@@ -35,6 +35,9 @@ import android.widget.ExpandableListView;
 import android.widget.SimpleExpandableListAdapter;
 import android.widget.TextView;
 import com.google.gson.JsonObject;
+
+import org.w3c.dom.Text;
+
 import java.util.Calendar;
 
 
@@ -97,7 +100,7 @@ public class DeviceControl extends AppCompatActivity {
     LocationTracker lt = new LocationTracker();
     LocationListener locationListener;
 
-    SQLiteDatabase db;
+    LocalStorage db;
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
@@ -190,8 +193,7 @@ public class DeviceControl extends AppCompatActivity {
             locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 0, locationListener);
         }
 
-        db = this.openOrCreateDatabase("air_quality", MODE_PRIVATE, null);
-        createDbTable();
+        db = new LocalStorage(this);
         // NOTE: this removes a bunch of testing CRAP data
 //        db.delete("air_samples", "provider = ? OR speed = ?", new String[]{
 //                "network",
@@ -216,109 +218,84 @@ public class DeviceControl extends AppCompatActivity {
 
     }
 
-    public void syncDbToSQS(View v) {
-        Cursor c = db.rawQuery("SELECT * FROM air_samples LIMIT 200", null);
+//    public void syncDbToSQS(View v) {
+//        Cursor c = db.rawQuery("SELECT * FROM air_samples LIMIT 200", null);
+//
+//        c.moveToFirst();
+//
+//        Log.d("DATABASE", "ROW COUNT: " + Integer.toString(c.getCount()));
+//
+////        // NOTE: you are here
+////        String[] dbCols = {"sensor_value", "read_time", "loc_time", "lat", "long", "speed",
+////                "bearing", "altitude", "accuracy", "provider"};
+////        HashMap<String, Class> dbCols = new HashMap<>();
+////        dbCols.put("sensor_value", String.class);
+//
+//        int i = 0;
+//        Long j = 0L;
+//        while (i < c.getCount()) {
+//            JsonObject msg = new JsonObject();
+//            msg.addProperty("sensor_value", c.getString(c.getColumnIndex("sensor_value")));
+//            msg.addProperty("read_time", c.getLong(c.getColumnIndex("read_time")));
+//            msg.addProperty("loc_time", c.getLong(c.getColumnIndex("loc_time")));
+//            msg.addProperty("lat", c.getDouble(c.getColumnIndex("lat")));
+//            msg.addProperty("long", c.getDouble(c.getColumnIndex("long")));
+//            msg.addProperty("speed", c.getDouble(c.getColumnIndex("speed")));
+//            msg.addProperty("bearing", c.getDouble(c.getColumnIndex("bearing")));
+//            msg.addProperty("altitude", c.getDouble(c.getColumnIndex("altitude")));
+//            msg.addProperty("accuracy", c.getDouble(c.getColumnIndex("accuracy")));
+//            msg.addProperty("provider", c.getString(c.getColumnIndex("provider")));
+//
+//            Log.d("QUEUE", "Sending msg: " + msg.toString());
+//
+//
+//
+//
+//            new SendMessage().execute(
+//                    Long.toString(++j),
+//                    msg.toString()
+//            );
+//
+//            String[] whereClauseArgs = {
+//                    Long.toString(c.getLong(c.getColumnIndex("read_time"))),
+//                    Long.toString(c.getLong(c.getColumnIndex("loc_time"))),
+//                    c.getString(c.getColumnIndex("sensor_value"))
+//
+//            };
+//            db.deleteRow( "read_time = ? AND loc_time = ? AND sensor_value = ?",
+//            whereClauseArgs);
+//
+//            i++;
+//            c.moveToNext();
+//        }
+//    }
 
-        c.moveToFirst();
-
-        Log.d("DATABASE", "ROW COUNT: " + Integer.toString(c.getCount()));
-
-//        // NOTE: you are here
-//        String[] dbCols = {"sensor_value", "read_time", "loc_time", "lat", "long", "speed",
-//                "bearing", "altitude", "accuracy", "provider"};
-//        HashMap<String, Class> dbCols = new HashMap<>();
-//        dbCols.put("sensor_value", String.class);
-
-        int i = 0;
-        Long j = 0L;
-        while (i < c.getCount()) {
-            JsonObject msg = new JsonObject();
-            msg.addProperty("sensor_value", c.getString(c.getColumnIndex("sensor_value")));
-            msg.addProperty("read_time", c.getLong(c.getColumnIndex("read_time")));
-            msg.addProperty("loc_time", c.getLong(c.getColumnIndex("loc_time")));
-            msg.addProperty("lat", c.getDouble(c.getColumnIndex("lat")));
-            msg.addProperty("long", c.getDouble(c.getColumnIndex("long")));
-            msg.addProperty("speed", c.getDouble(c.getColumnIndex("speed")));
-            msg.addProperty("bearing", c.getDouble(c.getColumnIndex("bearing")));
-            msg.addProperty("altitude", c.getDouble(c.getColumnIndex("altitude")));
-            msg.addProperty("accuracy", c.getDouble(c.getColumnIndex("accuracy")));
-            msg.addProperty("provider", c.getString(c.getColumnIndex("provider")));
-
-            Log.d("QUEUE", "Sending msg: " + msg.toString());
-
-
-
-
-            new SendMessage().execute(
-                    Long.toString(++j),
-                    msg.toString()
-            );
-
-            String[] whereClauseArgs = {
-                    Long.toString(c.getLong(c.getColumnIndex("read_time"))),
-                    Long.toString(c.getLong(c.getColumnIndex("loc_time"))),
-                    c.getString(c.getColumnIndex("sensor_value"))
-
-            };
-            db.delete("air_samples",
-                    "read_time = ? AND loc_time = ? AND sensor_value = ?",
-                    whereClauseArgs);
-            i++;
-            c.moveToNext();
-        }
-    }
-
-    private void createDbTable() {
-        String createTable = "CREATE TABLE IF NOT EXISTS air_samples( " +
-                " sensor_value VARCHAR, " +
-                " read_time INTEGER, " +
-                " loc_time INTEGER, " +
-                " lat DOUBLE, " +
-                " long DOUBLE, " +
-                " speed DOUBLE, " +
-                " bearing DOUBLE, " +
-                " altitude DOUBLE, " +
-                " accuracy DOUBLE, " +
-                " provider VARCHAR)";
-
-        db.execSQL(createTable);
-        Log.d("DATABASE", "db created");
-    }
 
     public void logAllRows(View v) {
-//        getAllDbRows();
 
-        Cursor c = db.rawQuery("SELECT COUNT(*) as cnt FROM air_samples", null);
-
-        int cntCol = c.getColumnIndex("cnt");
-
-        c.moveToFirst();
-
-        String cnt = Integer.toString(c.getInt(cntCol));
+        String cnt = Integer.toString(db.countRows());
 
         TextView cntV = findViewById(R.id.dbCntText);
         cntV.setText( cnt );
-
-        c.close();
     }
 
-    private void getAllDbRows() {
-        Cursor c = db.rawQuery("SELECT * FROM air_samples", null);
-
-        c.moveToFirst();
-
-        Log.d("DATABASE", "ROW COUNT: " + Integer.toString(c.getCount()));
-
-        int rdTmIdx = c.getColumnIndex("read_time");
-        int sensorIdx = c.getColumnIndex("sensor_value");
-
-        int i = 0;
-        while (i < c.getCount()) {
-            Log.d("DATABASE", "ROW= " + c.getString(sensorIdx) + " " + Long.toString(c.getLong(rdTmIdx)));
-            i++;
-            c.moveToNext();
-        }
-    }
+//    private void getAllDbRows() {
+//        Cursor c = db.rawQuery("SELECT * FROM air_samples", null);
+//
+//        c.moveToFirst();
+//
+//        Log.d("DATABASE", "ROW COUNT: " + Integer.toString(c.getCount()));
+//
+//        int rdTmIdx = c.getColumnIndex("read_time");
+//        int sensorIdx = c.getColumnIndex("sensor_value");
+//
+//        int i = 0;
+//        while (i < c.getCount()) {
+//            Log.d("DATABASE", "ROW= " + c.getString(sensorIdx) + " " + Long.toString(c.getLong(rdTmIdx)));
+//            i++;
+//            c.moveToNext();
+//        }
+//    }
 
     private void updateConnectionState(final int resourceId) {
         runOnUiThread(new Runnable() {
@@ -443,110 +420,63 @@ public class DeviceControl extends AppCompatActivity {
             }
         }
 
-        TextView charText;
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt,
                                             BluetoothGattCharacteristic characteristic) {
             final String airReading = characteristic.getStringValue(0);
-            Log.d("OH NOES", "onCharacteristicChanged - airReading: " + airReading);
+            Log.d("BLE CHAR CHANGE", "airReading: " + airReading);
 
             // NOTE: the final string is because of threads
             final Location lastLoc = lt.lastLocation;
-            String output = airReading;
-            output += ",";
-
             final Long currentTime = Calendar.getInstance().getTimeInMillis();
-            output += currentTime;
 
-            if (lastLoc != null) {
-                output += ",";
-                output += Double.toString( lastLoc.getLongitude() );
-
-                output += ",";
-                output += Double.toString( lastLoc.getLatitude() );
-
-                output += ",";
-                output += Float.toString( lastLoc.getBearing() );
-
-                output += ",";
-                output += lastLoc.getSpeed();
-
-                output += ",";
-                output += lastLoc.getAltitude();
-
-                output += ",";
-                output += lastLoc.getAccuracy();
-
-                output += ",";
-                output += lastLoc.getProvider();
-
-                output += ",";
-                output += lastLoc.getTime(); // This is the time the loc was created
-
-                output += ",";
-                output += currentTime - lastLoc.getTime();
-
-                Log.d("OH NOES", "onCharacteristicChanged - lastLoc: " + lastLoc.toString());
-
-                Log.d("DATABASE", "attempting insert");
-
-                String insertStmt = String.format("INSERT INTO air_samples " +
-                                "(sensor_value, read_time, loc_time, lat, long, speed, bearing, altitude, accuracy, provider)" +
-                                "VALUES ('%s', %d, %d, %f, %f, %f, %f, %f, %f, '%s')",
-                        airReading,
-                        currentTime,
-                        lastLoc.getTime(),
-                        lastLoc.getLatitude(),
-                        lastLoc.getLongitude(),
-                        lastLoc.getSpeed(),
-                        lastLoc.getBearing(),
-                        lastLoc.getAltitude(),
-                        lastLoc.getAccuracy(),
-                        lastLoc.getProvider()
-                );
-
-
-                db.execSQL(insertStmt);
-
-                Log.d("DATABASE", "inserted row?");
+            if (lastLoc == null) {
+                Log.d("BLE CHAR CHANGE","Location is Null. Avoiding NPE. Exiting");
+                return;
             }
 
-            final String outputToo = output;
+            final AirQualityData airQualityData = new AirQualityData(lastLoc, airReading, currentTime);
 
+            db.insertAirSampleWithLocation(airQualityData);
 
-            runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    charText = findViewById(R.id.rawData);
-                    charText.setText(outputToo);
+            Log.d("BLE CHAR CHANGE", "lastLoc: " + airQualityData.toString());
 
-                    if (lastLoc != null) {
-                        TextView locTime = findViewById(R.id.locTimeValue);
-                        locTime.setText(Long.toString(lastLoc.getTime()));
-
-                        TextView readingTime = findViewById(R.id.readingValue);
-                        readingTime.setText(Long.toString(currentTime));
-
-                        TextView latText = findViewById(R.id.latValue);
-                        latText.setText(Double.toString(lastLoc.getLatitude()));
-
-                        TextView longText = findViewById(R.id.longValue);
-                        longText.setText(Double.toString(lastLoc.getLongitude()));
-
-                        TextView speedText = findViewById(R.id.speedValue);
-                        speedText.setText(Double.toString(lastLoc.getSpeed()));
-
-                        TextView bearingText = findViewById(R.id.bearingValue);
-                        bearingText.setText(Double.toString(lastLoc.getBearing()));
-                    }
-
-                    TextView sensorText = findViewById(R.id.sensorValue);
-                    sensorText.setText(airReading);
-                }
-            });
-//            broadcastUpdate(ACTION_DATA_AVAILABLE, characteristic);
+            updateUIWithNewAirQualityData(airQualityData);
         }
     };
+
+    public void updateUIWithNewAirQualityData(final AirQualityData airQualityData) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                TextView charText = findViewById(R.id.rawData);
+                charText.setText(airQualityData.toString());
+
+                if (airQualityData.toString() != null) {
+                    TextView locTime = findViewById(R.id.locTimeValue);
+                    locTime.setText(Long.toString(airQualityData.getLocationTime()));
+
+                    TextView readingTime = findViewById(R.id.readingValue);
+                    readingTime.setText(Long.toString(airQualityData.getAirQualityTime()));
+
+                    TextView latText = findViewById(R.id.latValue);
+                    latText.setText(Double.toString(airQualityData.getLatitude()));
+
+                    TextView longText = findViewById(R.id.longValue);
+                    longText.setText(Double.toString(airQualityData.getLongitude()));
+
+                    TextView speedText = findViewById(R.id.speedValue);
+                    speedText.setText(Double.toString(airQualityData.getSpeed()));
+
+                    TextView bearingText = findViewById(R.id.bearingValue);
+                    bearingText.setText(Double.toString(airQualityData.getBearing()));
+                }
+
+                TextView sensorText = findViewById(R.id.sensorValue);
+                sensorText.setText(airQualityData.getSensorData());
+            }
+        });
+    }
 
     private void displayGattServices(List<BluetoothGattService> gattServices) {
         if (gattServices == null) return;
