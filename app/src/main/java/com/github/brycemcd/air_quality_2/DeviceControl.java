@@ -18,8 +18,6 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
-import android.database.Cursor;
-import android.database.sqlite.SQLiteDatabase;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
@@ -34,15 +32,13 @@ import android.view.View;
 import android.widget.ExpandableListView;
 import android.widget.SimpleExpandableListAdapter;
 import android.widget.TextView;
-import com.google.gson.JsonObject;
-
-import org.w3c.dom.Text;
 
 import java.util.Calendar;
 
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 
 import static com.github.brycemcd.air_quality_2.OnlineQueue.getCredProvider;
@@ -218,57 +214,20 @@ public class DeviceControl extends AppCompatActivity {
 
     }
 
-//    public void syncDbToSQS(View v) {
-//        Cursor c = db.rawQuery("SELECT * FROM air_samples LIMIT 200", null);
-//
-//        c.moveToFirst();
-//
-//        Log.d("DATABASE", "ROW COUNT: " + Integer.toString(c.getCount()));
-//
-////        // NOTE: you are here
-////        String[] dbCols = {"sensor_value", "read_time", "loc_time", "lat", "long", "speed",
-////                "bearing", "altitude", "accuracy", "provider"};
-////        HashMap<String, Class> dbCols = new HashMap<>();
-////        dbCols.put("sensor_value", String.class);
-//
-//        int i = 0;
-//        Long j = 0L;
-//        while (i < c.getCount()) {
-//            JsonObject msg = new JsonObject();
-//            msg.addProperty("sensor_value", c.getString(c.getColumnIndex("sensor_value")));
-//            msg.addProperty("read_time", c.getLong(c.getColumnIndex("read_time")));
-//            msg.addProperty("loc_time", c.getLong(c.getColumnIndex("loc_time")));
-//            msg.addProperty("lat", c.getDouble(c.getColumnIndex("lat")));
-//            msg.addProperty("long", c.getDouble(c.getColumnIndex("long")));
-//            msg.addProperty("speed", c.getDouble(c.getColumnIndex("speed")));
-//            msg.addProperty("bearing", c.getDouble(c.getColumnIndex("bearing")));
-//            msg.addProperty("altitude", c.getDouble(c.getColumnIndex("altitude")));
-//            msg.addProperty("accuracy", c.getDouble(c.getColumnIndex("accuracy")));
-//            msg.addProperty("provider", c.getString(c.getColumnIndex("provider")));
-//
-//            Log.d("QUEUE", "Sending msg: " + msg.toString());
-//
-//
-//
-//
-//            new SendMessage().execute(
-//                    Long.toString(++j),
-//                    msg.toString()
-//            );
-//
-//            String[] whereClauseArgs = {
-//                    Long.toString(c.getLong(c.getColumnIndex("read_time"))),
-//                    Long.toString(c.getLong(c.getColumnIndex("loc_time"))),
-//                    c.getString(c.getColumnIndex("sensor_value"))
-//
-//            };
-//            db.deleteRow( "read_time = ? AND loc_time = ? AND sensor_value = ?",
-//            whereClauseArgs);
-//
-//            i++;
-//            c.moveToNext();
-//        }
-//    }
+    public void syncDbToSQS(View v) {
+        LinkedList<AirQualityData> recordsToSync = db.getBatchRecords(200);
+        new OnlineQueue().syncRecordsToSQS(recordsToSync);
+
+        for (AirQualityData aqd : recordsToSync) {
+            String[] whereClauseArgs = {
+                    Long.toString(aqd.getAirQualityTime()),
+                    Long.toString(aqd.getLocationTime()),
+                    aqd.getSensorData()
+            };
+            db.deleteRow( "read_time = ? AND loc_time = ? AND sensor_value = ?",
+                    whereClauseArgs);
+        }
+    }
 
 
     public void logAllRows(View v) {
@@ -278,24 +237,6 @@ public class DeviceControl extends AppCompatActivity {
         TextView cntV = findViewById(R.id.dbCntText);
         cntV.setText( cnt );
     }
-
-//    private void getAllDbRows() {
-//        Cursor c = db.rawQuery("SELECT * FROM air_samples", null);
-//
-//        c.moveToFirst();
-//
-//        Log.d("DATABASE", "ROW COUNT: " + Integer.toString(c.getCount()));
-//
-//        int rdTmIdx = c.getColumnIndex("read_time");
-//        int sensorIdx = c.getColumnIndex("sensor_value");
-//
-//        int i = 0;
-//        while (i < c.getCount()) {
-//            Log.d("DATABASE", "ROW= " + c.getString(sensorIdx) + " " + Long.toString(c.getLong(rdTmIdx)));
-//            i++;
-//            c.moveToNext();
-//        }
-//    }
 
     private void updateConnectionState(final int resourceId) {
         runOnUiThread(new Runnable() {

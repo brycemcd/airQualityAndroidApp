@@ -1,6 +1,7 @@
 package com.github.brycemcd.air_quality_2;
 
 import android.content.Context;
+import android.database.Cursor;
 import android.os.AsyncTask;
 import android.util.Log;
 
@@ -8,6 +9,7 @@ import com.amazonaws.auth.CognitoCachingCredentialsProvider;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.sqs.AmazonSQSClient;
 import com.amazonaws.services.sqs.model.SendMessageBatchRequestEntry;
+import com.google.gson.JsonObject;
 
 import java.util.LinkedList;
 import java.util.List;
@@ -15,6 +17,19 @@ import java.util.List;
 // NOTE: this class is overloaded with Cognito Identity and writing to the SQS queue. This
 // is the only place where an AWS identity is needed so I'll park it here for now
 public class OnlineQueue {
+
+    protected class SendMessage extends AsyncTask<String, Void, Boolean> {
+        protected Boolean doInBackground(String[] args) {
+            String jsonMsg = args[1];
+            String msgId = args[0];
+
+            OnlineQueue.addEntry(msgId, jsonMsg);
+
+            return true;
+        }
+
+    }
+
     private static AmazonSQSClient sqsClient;
     private static CognitoCachingCredentialsProvider sCredProvider;
     private static String qURL = "https://sqs.us-east-1.amazonaws.com/304286125266/air_quality_dev";
@@ -67,5 +82,28 @@ public class OnlineQueue {
                     Regions.US_EAST_1);
         }
         return sCredProvider;
+    }
+
+    public LinkedList<AirQualityData> syncRecordsToSQS(LinkedList<AirQualityData> airQualityDataList) {
+
+
+//        // NOTE: you are here
+//        String[] dbCols = {"sensor_value", "read_time", "loc_time", "lat", "long", "speed",
+//                "bearing", "altitude", "accuracy", "provider"};
+//        HashMap<String, Class> dbCols = new HashMap<>();
+//        dbCols.put("sensor_value", String.class);
+
+        Long j = 0L;
+        for (AirQualityData aqd : airQualityDataList) {
+            JsonObject msg = aqd.toJson();
+
+            Log.d("SEND QUEUE", "msg: " + msg.toString());
+            new SendMessage().execute(
+                    Long.toString(++j),
+                    msg.toString()
+            );
+        }
+
+        return airQualityDataList;
     }
 }

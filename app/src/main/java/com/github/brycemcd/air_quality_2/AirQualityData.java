@@ -1,21 +1,24 @@
 package com.github.brycemcd.air_quality_2;
 
+import android.database.Cursor;
 import android.location.Location;
 import android.support.annotation.NonNull;
+
+import com.google.gson.JsonObject;
 
 import java.util.Calendar;
 
 public class AirQualityData {
-    public Double longitude;
+    public Double altitude;
     public Double latitude;
+    public Double longitude;
+    public String provider;
+    public String sensorData;
+    public float accuracy;
     public float bearing;
     public float speed;
-    public Double altitude;
-    public float accuracy;
-    public String provider;
-    public long locationTime;
     public long airQualityTime;
-    public String sensorData;
+    public long locationTime;
 
     public AirQualityData(@NonNull Location location, final String airReading, Long sensorTime) {
         setAirQualityTime(sensorTime);
@@ -31,6 +34,21 @@ public class AirQualityData {
         setLocationTime(location);
     }
 
+    public AirQualityData(Cursor c) {
+
+        setAirQualityTime(c.getLong(c.getColumnIndex("read_time")));
+        setSensorData(c.getString(c.getColumnIndex("sensor_value")));
+
+        setLocationTime(c.getLong(c.getColumnIndex("loc_time")));
+        setLatitude(c.getDouble(c.getColumnIndex("lat")));
+        setLongitude(c.getDouble(c.getColumnIndex("long")));
+        setSpeed(c.getFloat(c.getColumnIndex("speed")));
+        setBearing(c.getFloat(c.getColumnIndex("bearing")));
+        setAltitude(c.getDouble(c.getColumnIndex("altitude")));
+        setAccuracy(c.getFloat(c.getColumnIndex("accuracy")));
+        setProvider(c.getString(c.getColumnIndex("provider")));
+    }
+
     public Double getLongitude() {
         return longitude;
     }
@@ -39,12 +57,19 @@ public class AirQualityData {
         this.longitude = location.getLongitude();
     }
 
+    public void setLongitude(Double longitude) {
+        this.longitude = longitude;
+    }
+
     public Double getLatitude() {
         return latitude;
     }
 
     public void setLatitude(Location location) {
         this.latitude = location.getLatitude();
+    }
+    public void setLatitude(Double latitude) {
+        this.latitude = latitude;
     }
 
     public float getBearing() {
@@ -55,12 +80,20 @@ public class AirQualityData {
         this.bearing = location.getBearing();
     }
 
+    public void setBearing(Float bearing) {
+        this.bearing = bearing;
+    }
+
     public float getSpeed() {
         return speed;
     }
 
     public void setSpeed(Location location) {
         this.speed = location.getSpeed();
+    }
+
+    public void setSpeed(Float speed) {
+        this.speed = speed;
     }
 
     public Double getAltitude() {
@@ -71,12 +104,20 @@ public class AirQualityData {
         this.altitude = location.getAltitude();
     }
 
+    public void setAltitude(Double altitude) {
+        this.altitude = altitude;
+    }
+
     public float getAccuracy() {
         return accuracy;
     }
 
     public void setAccuracy(Location location) {
         this.accuracy = location.getAccuracy();
+    }
+
+    public void setAccuracy(Float accuracy) {
+        this.accuracy = accuracy;
     }
 
     public String getProvider() {
@@ -87,12 +128,20 @@ public class AirQualityData {
         this.provider = location.getProvider();
     }
 
+    public void setProvider(String provider) {
+        this.provider = provider;
+    }
+
     public long getLocationTime() {
         return locationTime;
     }
 
     public void setLocationTime(Location location) {
         this.locationTime = location.getTime();
+    }
+
+    public void setLocationTime(Long unixtime) {
+        this.locationTime = unixtime;
     }
 
     /**
@@ -155,5 +204,21 @@ public class AirQualityData {
         }
 
         return output;
+    }
+
+    public JsonObject toJson() {
+        JsonObject msg = new JsonObject();
+        msg.addProperty("sensor_value", getSensorData());
+        msg.addProperty("sensor_read_time", getAirQualityTime());
+        msg.addProperty("loc_time", getLocationTime());
+        msg.addProperty("latitude", getLatitude());
+        msg.addProperty("longitude", getLongitude());
+        msg.addProperty("speed", getSpeed());
+        msg.addProperty("bearing", getBearing());
+        msg.addProperty("altitude", getAltitude());
+        msg.addProperty("accuracy", getAccuracy());
+        msg.addProperty("provider", getProvider());
+
+        return msg;
     }
 }
