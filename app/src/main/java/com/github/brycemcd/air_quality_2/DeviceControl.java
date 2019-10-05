@@ -20,6 +20,9 @@ import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.TextView;
 
@@ -36,6 +39,7 @@ public class DeviceControl extends AppCompatActivity {
 
     private BluetoothManager bluetoothManager;
     private BluetoothAdapter bluetoothAdapter;
+    BluetoothLeService bluetoothLeService;
 
     private String airQualityBTAddress = "18:93:D7:14:57:B9";
     private String mDeviceAddress = airQualityBTAddress;
@@ -64,6 +68,49 @@ public class DeviceControl extends AppCompatActivity {
         }
     }
 
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        MenuInflater menuInflater = getMenuInflater();
+        menuInflater.inflate(R.menu.main_menu, menu);
+        return super.onCreateOptionsMenu(menu);
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        super.onOptionsItemSelected(item);
+        switch (item.getItemId()) {
+
+            case R.id.deleteAll:
+                Log.d("MENU SELECT", "DELETE ALL");
+                db.deleteAll();
+                break;
+
+            case R.id.syncDataOffDevice:
+                Log.d("MENU SELECT", "Sync Data");
+                syncDbToSQS();
+                break;
+
+            case R.id.disconnectBT:
+                Log.d("MENU SELECT", "disconnect BT");
+                if (bluetoothLeService != null) {
+                    bluetoothLeService.disconnect();
+                }
+                break;
+
+            case R.id.connectBT:
+                Log.d("MENU SELECT", "connect BT");
+                if (bluetoothLeService != null) {
+                    bluetoothLeService.connect(this, airQualityBTAddress);
+                }
+                break;
+
+            default:
+                return false;
+        }
+        updateUIWithDBRowCount();
+        return true;
+
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -78,7 +125,7 @@ public class DeviceControl extends AppCompatActivity {
 
         persCont = this;
         initializeBTConnction();
-        BluetoothLeService bluetoothLeService = new BluetoothLeService(bluetoothManager);
+        bluetoothLeService = new BluetoothLeService(bluetoothManager);
         int result = bluetoothLeService.connect(this, airQualityBTAddress);
         Log.d("BLOOTOOTH", "CONNECTION RESULT: " + Integer.toString(result));
 
@@ -114,19 +161,14 @@ public class DeviceControl extends AppCompatActivity {
         // LOCAL STORAGE STUFF
 
         db = new LocalStorage(this);
-        // NOTE: this removes a bunch of testing CRAP data
-//        db.delete("air_samples", "provider = ? OR speed = ?", new String[]{
-//                "network",
-//                "0.0"
-//        });
 
-
+        // SQS (OnlineQueue) Stuff
         getCredProvider(this);
         getSQSClient(this);
 
     }
 
-    public void syncDbToSQS(View v) {
+    public void syncDbToSQS() {
         LinkedList<AirQualityData> recordsToSync = db.getBatchRecords(200);
         new OnlineQueue().syncRecordsToSQS(recordsToSync);
 
@@ -142,8 +184,9 @@ public class DeviceControl extends AppCompatActivity {
     }
 
 
-    public void logAllRows(View v) {
+    public void logDataPush(View v) { updateUIWithDBRowCount(); }
 
+    public void updateUIWithDBRowCount() {
         String cnt = Integer.toString(db.countRows());
 
         TextView cntV = findViewById(R.id.dbCntText);
@@ -188,6 +231,7 @@ public class DeviceControl extends AppCompatActivity {
 
         TextView sensorText = ((Activity)persCont).findViewById(R.id.sensorValue);
         sensorText.setText(airQualityData.getSensorData());
+
     }
 
     public static void updateUIWithConnectionState(int connectionState) {

@@ -82,6 +82,12 @@ public class BluetoothLeService {
         return STATE_CONNECTING;
     }
 
+    public void disconnect() {
+        if (bluetoothGatt != null) {
+            bluetoothGatt.disconnect();
+        }
+    }
+
     private final BluetoothGattCallback mGattCallback = new BluetoothGattCallback() {
         @Override
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:title="Delete All Data On Device" android:id="@+id/deleteAll"></item>
+    <item android:title="Sync Data to SQS" android:id="@+id/syncDataOffDevice"></item>
+    <item android:title="Connect Bluetooth" android:id="@+id/connectBT"></item>
+    <item android:title="Disconnect Bluetooth" android:id="@+id/disconnectBT"></item>
+</menu>

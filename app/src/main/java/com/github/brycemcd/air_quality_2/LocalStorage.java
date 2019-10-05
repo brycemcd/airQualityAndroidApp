@@ -73,7 +73,7 @@ public class LocalStorage {
 
         db.execSQL(insertStmt);
 
-        Log.d("DATABASE", "inserted row?");
+        Log.d("DATABASE", "inserted row");
     }
 
     public LinkedList<AirQualityData> getBatchRecords(int limit) {
@@ -93,6 +93,13 @@ public class LocalStorage {
         }
 
         return results;
+    }
 
+    /**
+     * A _dangerous_ method that removes all rows from the local store
+     */
+    public void deleteAll() {
+        Log.d("DATABASE", "Removing ALL rows!");
+        db.delete(AIR_SAMPLE_TABLE_NAME, "", null);
     }
 }
