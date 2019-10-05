@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">YOUR MOM</string>
+    <string name="app_name">Air Quality</string>
 
     <string name="ble_not_supported">BLE is not supported</string>
     <string name="label_data">Data:</string>
